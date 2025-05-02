@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ActionBot - Summarizer</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script> 
+  <style>
+    /* Extra Styling for Toast + Spinner + Avatars */
+    #toast {
+      visibility: hidden;
+      min-width: 250px;
+      background-color: #4CAF50;
+      color: white;
+      text-align: center;
+      border-radius: 8px;
+      padding: 16px;
+      position: fixed;
+      z-index: 1;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      font-size: 17px;
+    }
+
+    #toast.show {
+      visibility: visible;
+      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }
+
+    @keyframes fadein {
+      from {bottom: 0; opacity: 0;}
+      to {bottom: 30px; opacity: 1;}
+    }
+
+    @keyframes fadeout {
+      from {bottom: 30px; opacity: 1;}
+      to {bottom: 0; opacity: 0;}
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+
+    .message-container {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <a href="ActionBotWithUpload.html">📄 Summarize</a>
+  <a href="ActionBotRetrieval.html">💬 ActionBot</a>
+</nav>
+
+<div class="container">
+  <h1>📄 Summarize Transcript</h1>
+
+  <div id="upload-section">
+    <input type="file" id="file-input" accept=".txt">
+    <button id="upload-button">Upload & Summarize</button>
+    <button id="download-chat-button" style="margin-left: 10px;">⬇️ Download Chat</button>
+  </div>
+
+  <div id="chat-container"></div>
+
+  <div>
+    <button id="summarize-more-button" style="display:none;">Summarize Another Document</button>
+  </div>
+
+  <div id="toast">Transcript summarized successfully!</div>
+</div>
+
+
+<script>
+const API_URL =CONFIG.SUMMARIZATION_API_URL;
+const API_TOKEN = CONFIG.API_TOKEN; 
+
+const chatContainer = document.getElementById('chat-container');
+const fileInput = document.getElementById('file-input');
+const uploadButton = document.getElementById('upload-button');
+const summarizeMoreButton = document.getElementById('summarize-more-button');
+const toast = document.getElementById('toast');
+const downloadButton = document.getElementById('download-chat-button');
+
+function appendMessage(sender, text) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}`;
+
+  const container = document.createElement('div');
+  container.className = 'message-container';
+
+  const avatar = document.createElement('img');
+  avatar.className = 'avatar';
+  avatar.src = sender === 'user' ? 'https://cdn-icons-png.flaticon.com/512/1946/1946429.png' : 'https://cdn-icons-png.flaticon.com/512/4712/4712039.png';
+
+  const textNode = document.createElement('div');
+  textNode.innerHTML = text.replace(/\n/g, "<br>");
+
+  container.appendChild(avatar);
+  container.appendChild(textNode);
+  messageDiv.appendChild(container);
+  chatContainer.appendChild(messageDiv);
+
+  // Auto-scroll to bottom
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function showToast(message) {
+  toast.innerText = message;
+  toast.className = "show";
+  setTimeout(() => {
+    toast.className = toast.className.replace("show", "");
+  }, 3000);
+}
+
+uploadButton.addEventListener('click', async () => {
+  const file = fileInput.files[0];
+  if (!file) {
+    alert("Please upload a transcript (.txt file) first.");
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const transcriptText = e.target.result;
+    appendMessage('user', "📄 Uploaded transcript...");
+    appendMessage('bot', "⏳ Summarizing, please wait...");
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${API_TOKEN}`
+        },
+        body: JSON.stringify({
+          input_value: transcriptText,
+          output_type: "chat",
+          input_type: "chat",
+          session_id: "summarizer_user"
+        })
+      });
+
+      const data = await response.json();
+      const summary = data.outputs?.[0]?.outputs?.[0]?.results?.message?.text || "No summary.";
+
+      chatContainer.innerHTML = '';
+      appendMessage('bot', summary);
+
+      fileInput.disabled = true;
+      uploadButton.disabled = true;
+      summarizeMoreButton.style.display = 'inline-block';
+      showToast("✅ Transcript summarized successfully!");
+
+    } catch (error) {
+      chatContainer.innerHTML = '';
+      appendMessage('bot', "❌ Error summarizing the transcript.");
+    }
+  };
+  reader.readAsText(file);
+});
+
+summarizeMoreButton.addEventListener('click', () => {
+  chatContainer.innerHTML = '';
+  fileInput.disabled = false;
+  uploadButton.disabled = false;
+  fileInput.value = '';
+  appendMessage('bot', "Upload a new transcript to summarize.");
+});
+
+downloadButton.addEventListener('click', () => {
+  const messages = document.querySelectorAll('.message');
+  let chatText = '';
+
+  messages.forEach(msg => {
+    const sender = msg.classList.contains('user') ? "User" : "Bot";
+    chatText += `${sender}: ${msg.innerText.trim()}\n\n`;
+  });
+
+  const blob = new Blob([chatText], {type: 'text/plain'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'chat_summary.txt';
+  link.click();
+});
+</script>
+
+</body>
+</html>

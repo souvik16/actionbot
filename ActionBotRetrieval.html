@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>ActionBot - Chatbot</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <style>
+    /* Extra Styling for Toast + Avatars */
+    #toast {
+      visibility: hidden;
+      min-width: 250px;
+      background-color: #4CAF50;
+      color: white;
+      text-align: center;
+      border-radius: 8px;
+      padding: 16px;
+      position: fixed;
+      z-index: 1;
+      left: 50%;
+      bottom: 30px;
+      transform: translateX(-50%);
+      font-size: 17px;
+    }
+
+    #toast.show {
+      visibility: visible;
+      animation: fadein 0.5s, fadeout 0.5s 2.5s;
+    }
+
+    @keyframes fadein {
+      from {bottom: 0; opacity: 0;}
+      to {bottom: 30px; opacity: 1;}
+    }
+
+    @keyframes fadeout {
+      from {bottom: 30px; opacity: 1;}
+      to {bottom: 0; opacity: 0;}
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+
+    .message-container {
+      display: flex;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Home</a>
+  <a href="ActionBotWithUpload.html">📄 Summarize</a>
+  <a href="ActionBotRetrieval.html">💬 ActionBot</a>
+</nav>
+
+<div class="container">
+  <h1>💬 ActionBot Personal Secretory</h1>
+
+  <div id="chat-container"></div>
+
+  <div id="input-area">
+    <input type="text" id="user-input" placeholder="Type your question...">
+    <button id="send-button">Send</button>
+    <button id="download-chat-button" style="margin-left: 10px;">⬇️ Download Chat</button>
+  </div>
+
+  <div id="toast">Message sent successfully!</div>
+</div>
+<script>
+
+window.addEventListener('load', () => {
+  const welcomeMessage = "Hey there! 👋 I’m your assistant, ready to help out. Got questions about the meeting transcript you uploaded? Maybe you’re looking for action points from the Product Demo on Jan 1st, 2025, or wondering what tasks Mark’s got from the Sales Retrospective on March 4th? Whatever it is, just fire away — I’ve got you covered!";
+  
+  // Step 1: Show typing animation
+  appendMessage('bot', 'ActionBot is typing<span>.</span><span>.</span><span>.</span>', false);
+
+  // Step 2: Wait 2 seconds
+  setTimeout(() => {
+    // Step 3: Remove typing
+    const messages = document.querySelectorAll('.bot');
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.innerHTML.includes('typing')) {
+      lastMessage.remove();
+    }
+    
+    // Step 4: Show real greeting
+    appendMessage('bot', welcomeMessage);
+  }, 2000);
+});
+
+// === CONFIG ===
+const CHAT_API_URL =CONFIG.CHATBOT_API_URL
+const CHAT_API_TOKEN = CONFIG.API_TOKEN; 
+
+// === REFERENCES ===
+const chatContainer = document.getElementById('chat-container');
+const userInput = document.getElementById('user-input');
+const sendButton = document.getElementById('send-button');
+const toast = document.getElementById('toast');
+const downloadButton = document.getElementById('download-chat-button');
+
+// === FUNCTIONS ===
+function appendMessage(sender, text) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = `message ${sender}`;
+
+  const container = document.createElement('div');
+  container.className = 'message-container';
+
+  const avatar = document.createElement('img');
+  avatar.className = 'avatar';
+  avatar.src = sender === 'user' ? 'https://cdn-icons-png.flaticon.com/512/1946/1946429.png' : 'https://cdn-icons-png.flaticon.com/512/4712/4712039.png';
+
+  const textNode = document.createElement('div');
+  textNode.innerHTML = text.replace(/\n/g, "<br>");
+
+  container.appendChild(avatar);
+  container.appendChild(textNode);
+  messageDiv.appendChild(container);
+  chatContainer.appendChild(messageDiv);
+
+  // Auto-scroll
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function showToast(message) {
+  toast.innerText = message;
+  toast.className = "show";
+  setTimeout(() => {
+    toast.className = toast.className.replace("show", "");
+  }, 3000);
+}
+
+async function sendMessage() {
+  const inputText = userInput.value.trim();
+  if (!inputText) return;
+
+  appendMessage('user', inputText);
+  userInput.value = '';
+
+  appendMessage('bot', '🧠 Thinking...');
+
+  try {
+    const response = await fetch(CHAT_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${CHAT_API_TOKEN}`
+      },
+      body: JSON.stringify({
+        input_value: inputText,
+        output_type: "chat",
+        input_type: "chat",
+        session_id: "chat_user"
+      })
+    });
+
+    const data = await response.json();
+    const botReply = data.outputs?.[0]?.outputs?.[0]?.results?.message?.text || "No response.";
+
+    // Remove "Thinking..." message
+    const messages = document.querySelectorAll('.bot');
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.innerText === '🧠 Thinking...') {
+      lastMessage.remove();
+    }
+
+    appendMessage('bot', botReply);
+    showToast("✅ Message answered!");
+
+  } catch (error) {
+    appendMessage('bot', "❌ Error. Please try again.");
+  }
+}
+
+function downloadChat() {
+  const messages = document.querySelectorAll('.message');
+  let chatText = '';
+
+  messages.forEach(msg => {
+    const sender = msg.classList.contains('user') ? "User" : "Bot";
+    chatText += `${sender}: ${msg.innerText.trim()}\n\n`;
+  });
+
+  const blob = new Blob([chatText], {type: 'text/plain'});
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'chat_history.txt';
+  link.click();
+}
+
+// === EVENTS ===
+sendButton.addEventListener('click', sendMessage);
+userInput.addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') {
+    sendMessage();
+  }
+});
+downloadButton.addEventListener('click', downloadChat);
+</script>
+
+</body>
+</html>
